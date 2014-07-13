@@ -13,37 +13,46 @@ module.exports = function(grunt) {
   // Please see the Grunt documentation for more information regarding task
   // creation: http://gruntjs.com/creating-tasks
 
-  grunt.registerMultiTask('dpdjs', 'Generate local dpd.js file.', function() {
+  grunt.registerTask('dpdjs', 'Generate local dpd.js file.', function() {
     // Merge task-specific and/or target-specific options with these defaults.
     var options = this.options({
-      punctuation: '.',
-      separator: ', '
+      serverPath: './',
+      dest: 'public/js/dpd.js'
     });
 
-    // Iterate over all specified file groups.
-    this.files.forEach(function(f) {
-      // Concat specified files.
-      var src = f.src.filter(function(filepath) {
-        // Warn on and remove invalid source files (if nonull was set).
-        if (!grunt.file.exists(filepath)) {
-          grunt.log.warn('Source file "' + filepath + '" not found.');
-          return false;
-        } else {
-          return true;
+    var ClientLib = require('deployd/lib/resources/client-lib'),
+        Config    = require('deployd/lib/config-loader');
+
+    var done = this.async();
+
+    Config.loadConfig(options.serverPath, {}, function(err, resources) {
+      if(err) {
+        grunt.log.error(err.message);
+        done(false);
+      }
+
+      // exclude internal resources
+      resources = resources.slice(0, -4);
+
+      var clientLib = new ClientLib(options.dest, { config: { resources: resources } });
+      var res = {
+        output: '',
+        write: function(str) {
+          res.output += str;
         }
-      }).map(function(filepath) {
-        // Read file source.
-        return grunt.file.read(filepath);
-      }).join(grunt.util.normalizelf(options.separator));
+      };
 
-      // Handle options.
-      src += options.punctuation;
+      clientLib.load(function() {
+        clientLib.generate(res, function() {
+          // Write the destination file.
+          grunt.file.write(options.dest, clientLib.clientLib + res.output);
 
-      // Write the destination file.
-      grunt.file.write(f.dest, src);
+          // Print a success message.
+          grunt.log.writeln('File "' + options.dest + '" created.');
 
-      // Print a success message.
-      grunt.log.writeln('File "' + f.dest + '" created.');
+          done();
+        });
+      });
     });
   });
 
